@@ -1,0 +1,157 @@
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.9.3
+    container_name: zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "echo", "ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: bitnami/kafka:3.9.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    ports:
+      - "9092:9092"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:6.2
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    user: root
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/config:/etc/clickhouse-server
+      - ./clickhouse/initialization:/docker-entrypoint-initdb.d
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "clickhouse-client","--host", "127.0.0.1", "--port", "9000","--query", "SELECT 1"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+
+  banki_ru_parser:
+    build: ./parsers/banki_ru_parser
+    container_name: banki_ru_parser
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC_IN=reviews_in
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - backend
+    entrypoint: ["./wait-for-it.sh", "kafka:9092", "--", "./wait-for-it.sh", "redis:6379", "--", "python", "banki_ru_parser.py"]
+
+  ml_model:
+    build: ./ml_model
+    container_name: ml_model
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - MODEL_DIR=/app/model
+    ports:
+      - "5000:5000"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    entrypoint: ["./wait-for-it.sh", "kafka:9092", "--", "./wait-for-it.sh", "redis:6379", "--", "python", "model_inference.py"]
+
+  etl_service:
+    build: ./etl
+    container_name: etl_service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml_model:
+        condition: service_healthy
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC_IN=reviews_in
+      - KAFKA_TOPIC_OUT=reviews_classified
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ML_SERVICE_URL=http://ml_model:5000/classify
+    networks:
+      - backend
+    entrypoint: ["./wait-for-it.sh", "kafka:9092", "--", "./wait-for-it.sh", "redis:6379", "--", "python", "etl_service.py"]
+
+  writer_to_clickhouse:
+    user: root
+    build: ./writer_to_clickhouse
+    container_name: writer_to_clickhouse
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=reviews_classified
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+    networks:
+      - backend
+    entrypoint: ["./wait-for-it.sh", "kafka:9092", "--", "./wait-for-it.sh", "clickhouse:9000", "--", "python", "write_to_ch.py"]
+
+volumes:
+  clickhouse_data:
+
+networks:
+  backend:
+    driver: bridge

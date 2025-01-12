@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<yandex>
+    <!-- Путь к директории с данными -->
+    <path>/var/lib/clickhouse/</path>
+
+    <!-- Путь к временным файлам -->
+    <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+
+    <!-- Путь к пользовательским файлам -->
+    <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+
+    <!-- Путь к схемам форматов -->
+    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+
+    <!-- Логирование -->
+    <logger>
+        <level>information</level>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+    </logger>
+
+    <!-- Сетевые настройки -->
+   <listen_host>0.0.0.0</listen_host>
+
+    <!-- Порты -->
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+
+    <!-- Настройки пользователей -->
+    <users>
+        <default>
+            <password></password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+        </default>
+    </users>
+
+    <!-- Настройки профилей -->
+    <profiles>
+        <default>
+            <max_threads>16</max_threads>
+            <max_memory_usage>10000000000</max_memory_usage>
+            <use_uncompressed_cache>1</use_uncompressed_cache>
+            <max_bytes_before_external_sort>1000000000</max_bytes_before_external_sort>
+            <max_bytes_before_external_group_by>1000000000</max_bytes_before_external_group_by>
+        </default>
+    </profiles>
+
+    <!-- Настройки квот -->
+    <quotas>
+        <default>
+            <duration>3600</duration>
+            <queries>0</queries>
+            <errors>0</errors>
+            <result_rows>0</result_rows>
+            <read_rows>0</read_rows>
+            <execution_time>0</execution_time>
+        </default>
+    </quotas>
+
+    <!-- Дополнительные настройки (при необходимости) -->
+</yandex>
