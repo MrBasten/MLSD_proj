@@ -57,3 +57,4 @@ docker-compose up --build
 - Окно с последними отзывами
 Ниже представлены скриншоты с примерами
 ![](https://github.com/MrBasten/MLSD_proj/blob/main/image/%20Dashboard%20Screenshot%201.jpg)
+![](https://github.com/MrBasten/MLSD_proj/blob/main/image/Dashboard%20Screenshot%202.jpg)
